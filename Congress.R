@@ -7,7 +7,7 @@ mydata = lapply(filenames, function(t) {
   dum$filenames = t
   return(dum)})
 
-
+# jkajfklajflkajl
 example=mydata[[1]]
 name=names(example[[1]])
 
