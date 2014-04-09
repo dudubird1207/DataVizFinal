@@ -56,12 +56,16 @@ name=c(names(mydata[[1]][[1]]),"date")
 setnames(final.raw,name)
 final.raw=as.data.frame(final.raw)
 
-#write out the data frame as a .csv file
-write.csv(final.raw,"final_raw.csv")
-
-
+#save the data frame
+save(final.raw,file="final_raw.Rda")
 
 #####-----------the rest is just for checking-------------#####
+
+final.raw[200000,]
+
+
+
+
 ff=list()
 for (q in c(1:213)){
   ff[[q]]=data.frame()
