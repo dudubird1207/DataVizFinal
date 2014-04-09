@@ -1,35 +1,67 @@
-path <- "F:/dataviz_data/Congress Gov_2012"
-filenames <- paste0(path, "/",list.files(path, pattern = "json"))
-library(rjson)
+########DataViz Final Projects#########
 
+rm(list=ls())
+if(!require(rjson)){
+  install.packages("rjson")
+  library(rjson)
+}
+if(!require(stringr)){
+  install.packages("stringr")
+  library(stringr)
+}
+if(!require(data.table)){
+  install.packages("data.table")
+  library(data.table)
+}
+
+#####---------convert json file into data frame--------#####
+
+#for read in data, generate all the paths
+path <- "C:/Users/Rongyao/Documents/GitHub/DataVizFinal/Release_2012"
+filenames <- paste0(path, "/",list.files(path, pattern = "json"))
+
+#extract the release date from file name
+Release<-list.files(path,pattern="json")
+Release<-sapply(Release,function(x)str_sub(x,13,20))
+
+#read in json file, convert into list
 mydata = lapply(filenames, function(t) {
   dum=fromJSON(paste(readLines(t), collapse=""))
-  dum$filenames = t
-  return(dum)})
+  return(dum)}) 
 
-# jkajfklajflkajl   llalalalalalalalal
-example=mydata[[1]]
-name=names(example[[1]])
-
+#convert each release file into a data frame with tags as columns and articles as rows
+#the date information extracted previously will be appended to the end of the columns
+#the resulting list will have 366 elements, each of which a data frame  
 d=list()
-for (q in c(1:213)){
+for (q in c(1:366)){
   d[[q]]=data.frame()
+  date<-Release[q]
    for (i in c(1:length(mydata[[q]]))){ 
-     for (j in c(1:16)){
+     for (j in c(1:14)){
        if (length(unlist(mydata[[q]][[i]][j]))==1){
         d[[q]][i,j]=unlist(mydata[[q]][[i]][j])
          }else{
         d[[q]][i,j]=paste(mydata[[q]][[i]][j],collapse="@")
          }
-   }
+    }
+    d[[q]][i,15]<-date
  }
 }
 
-library(data.table)
+#stack all the list together
+#the resulting data frame will have each article has a row and tags as columns
+#tag names are added as column name
 final.raw=rbindlist(d)
+name=c(names(mydata[[1]][[1]]),"date")
 setnames(final.raw,name)
 final.raw=as.data.frame(final.raw)
 
+#write out the data frame as a .csv file
+write.csv(final.raw,"final_raw.csv")
+
+
+
+#####-----------the rest is just for checking-------------#####
 ff=list()
 for (q in c(1:213)){
   ff[[q]]=data.frame()
