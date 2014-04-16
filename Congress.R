@@ -70,16 +70,15 @@ length<-numeric()
 for (i in 1:nrow(final.raw)){
   length[i]<-length(str_locate_all(final.raw[i,"source"],",")[[1]][,1])
 }
-unique(length)   #0 7 8 9 10 
+unique(length)   #7,8,9,10
 
-#check how many completely missing
-length(which(length==0))
-
-#test on a short example with all possible situations
-example<-final.raw$source[c(which(length==10)[1],which(length==9)[1],which(length==8)[1],which(length==7)[1],which(length==0)[1])]
+#####test on a short example with all possible situations####
+#############################################################
+example<-final.raw$source[c(which(length==7)[1],which(length==8)[1],which(length==9)[1],which(length==10)[1])]
 class(example)
-x<-str_split(example,pattern="\",")
-class(x)
+View(example)
+x<-str_split(example,pattern="\",")    #we have sublist of either length 6 or 7 
+class(x)      
 
 #deal with different length
 x<-sapply(x,FUN=function(i){
@@ -90,44 +89,85 @@ x<-sapply(x,FUN=function(i){
   }
   return(i.v)
 })
+class(x)
+View(x)
 
-#write a function to extract info
+#reformat the data, so that each column is a tag
+x<-sapply(1:nrow(x),function(i)x[i,])
+
+#split the columns that have two variables
+#but before that, pick out those that are completely missing
+x[,1]<-unlist(str_extract_all(x[,1],"name = .*"))
+new<-ldply(str_split(x[,3],pattern=", "),function(i)data.frame(s3=i[1],s4=i[2]))
+x<-cbind(x[,1:2],new,x[,5:7])
+View(x)
+
+#change column names
+names(x)<-c("name","locationName","current","government","orgType","stateDelegation","gender")
+
+#remove name tags in the content
+x.1<-str_replace_all(as.matrix(x),"[[:alpha:]]+ = ","")
+View(x.1)
+#further cleaning, remove \",), and leading and trailing white spaces
+x.1<-str_replace_all(x.1,"\"","")
+x.1[,7]<-str_replace_all(x.1[,7],")","")
+x.1<-str_trim(x.1,side="both")
+
+#Now this is clean
+View(x.1)
+
+#####apply to the whole dataset ####
+#############################################################
+
+s<-final.raw$source
+class(s)
+View(s)
+s.1<-str_split(s,pattern="\",")    #we have sublist of either length 6 or 7 
+class(s.1)
+
+#deal with different length
+s.2<-sapply(s.1,FUN=function(i){
+  i.v<-unlist(i)
+  if (length(i.v)==6){
+    i.v<-c(i.v,i.v[6])
+    i.v[6]<-NA
+  }
+  return(i.v)
+})
+class(s.2)   #weired now it's a list
+
+
+#reformat the data, so that each column is a tag
 get.source.info <- function(object){
   data.frame(s1=object[1],s2=object[2],s3=object[3],s5=object[4],s6=object[5],
              s7=object[6],s8=object[7])
 }
 
 require(plyr)
-source.split <- ldply(x,get.source.info)
-View(source.split)
+s.3 <- ldply(s.2,get.source.info)
+head(s.3)   #wonderful!!!!
 
 #split the columns that have two variables
-#but before that, pick out those that are completely missing
-emptyindex<-which(is.na(source.split$s1=="NA"))
-source.split<-source.split[-emptyindex,]
-
-source.split$s1<-unlist(str_extract_all(source.split$s1,"name = .*"))
-new<-ldply(str_split(source.split$s3,pattern=", "),function(x)data.frame(s3=x[1],s4=x[2]))
-source.split<-cbind(source.split[,1:2],new,source.split[,5:7])
+s.3[,1]<-unlist(str_extract_all(s.3[,1],"name = .*"))
+new<-ldply(str_split(s.3[,3],pattern=", "),function(i)data.frame(s3=i[1],s4=i[2]))
+s.4<-cbind(s.3[,1:2],new,s.3[,5:7])
+head(s.4)
 
 #change column names
-names(source.split)<-c("name","locationName","current","government","orgType","stateDelegation","gender")
+names(s.4)<-c("name","locationName","current","government","orgType","stateDelegation","gender")
 
 #remove name tags in the content
-x<-str_replace_all(as.matrix(source.split),"[[:alpha:]]+ = ","")
-
+s.5<-str_replace_all(as.matrix(s.4),"[[:alpha:]]+ = ","")
+head(s.5)
 #further cleaning, remove \",), and leading and trailing white spaces
-x<-str_replace_all(x,"\"","")
-x[,"gender"]<-str_replace_all(x[,"gender"],")","")
-x<-str_trim(x,side="both")
-
+s.6<-str_replace_all(s.5,"\"","")
+s.6[,7]<-str_replace_all(s.6[,7],")","")
+s.7<-str_trim(s.6,side="both")
+s.8<-as.data.frame(s.7)
 #Now this is clean
-View(x)
+View(s.8[1:10,])
 
-
-
-
-
+save(s.8,file="source.Rda")
 
 
 
