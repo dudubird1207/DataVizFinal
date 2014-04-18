@@ -120,6 +120,7 @@ View(x.1)
 #############################################################
 
 s<-final.raw$source
+length(s)
 class(s)
 View(s)
 s.1<-str_split(s,pattern="\",")    #we have sublist of either length 6 or 7 
@@ -169,9 +170,54 @@ View(s.8[1:10,])
 
 save(s.8,file="source.Rda")
 
+load("source.Rda")
+View(s.8[1:20,])
 
+######---clean text column-----####
+expression="<[^>]*.>"
+clean=function(x){
+  t=gsub(expression,"",x)
+  t2=gsub("(\n)","",t)
+  return(t2)
+}
+text=sapply(final.raw[,13],clean)
+length(text)
+text[1:2]
+names(text)<-"text"
+text1<-as.data.frame(text)
 
+######---clean other column-----####
+example<-final.raw$keywords[1:10]
+k.1<-str_replace_all(example,"c\\(","")
+k.2<-str_replace_all(k.1,")","")
+k.3<-str_replace_all(k.2,"\"","")
+View(k.3)
 
+cleanother<-function(x){
+  x<-str_replace_all(x,"c\\(","")
+  x<-str_replace_all(x,")","")
+  x<-str_replace_all(x,"\"","")
+}
+
+names(final.raw)
+pp<-sapply(final.raw[,c("keywords","names","organisations","places")],cleanother)
+View(pp)
+head(pp)
+pp<-as.data.frame(pp)
+names(pp)<-c("keywords","names","organisations","places")
+or<-str_replace_all(pp$organisations,"^list\\($","")
+pp$organisations<-or
+
+#####combine cleaned data with the original dataset
+View(final.raw[1:6,])
+names(final.raw)
+
+final.raw1<-final.raw[,c(1,14,15)]
+final.raw2<-cbind(final.raw1,s.8,pp)
+
+save(final.raw2,file="final_clean.Rda")
+
+##-----clean key words-----##
 
 #####-----------the rest is just for checking-------------#####
 
