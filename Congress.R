@@ -13,6 +13,16 @@ if(!require(data.table)){
   install.packages("data.table")
   library(data.table)
 }
+if(!require(stm)){
+  install.packages("stm")
+  library(stm)
+}
+
+
+###########################################################
+######----preliminary data cleaning--------################
+###########################################################
+
 
 #####---------convert json file into data frame--------#####
 
@@ -59,11 +69,15 @@ final.raw=as.data.frame(final.raw)
 #save the data frame
 save(final.raw,file="final_raw.Rda")
 
+
+
+
+
 #####---------clean the data frame--------#####
 
 load("final_raw.Rda")
 str(final.raw)
-View(final.raw[6:10,])
+View(final.raw[100:110,])
 
 #check the number of tags in each source column
 length<-numeric()
@@ -123,39 +137,43 @@ s<-final.raw$source
 length(s)
 class(s)
 View(s)
-s.1<-str_split(s,pattern="\",")    #we have sublist of either length 6 or 7 
+s.1<-str_split(s,pattern="\"[[:blank:]]{0,1},")    #we have sublist of either length 6,7 or 8
 class(s.1)
+unique(sapply(s.1,length))
 
 #deal with different length
 s.2<-sapply(s.1,FUN=function(i){
   i.v<-unlist(i)
-  if (length(i.v)==6){
-    i.v<-c(i.v,i.v[6])
-    i.v[6]<-NA
+  if (length(i.v)==7){
+    i.v.new<-i.v
+  }else if (length(i.v)==6){
+    i.v.new<-c(i.v,i.v[6])
+    i.v.new[6]<-NA
+  }else {
+    i.v[1]<-paste(i.v[1],i.v[2],sep="")
+    i.v[2:7]<-i.v[3:8]
+    i.v.new<-i.v[1:7]
   }
-  return(i.v)
+  return(i.v.new)
 })
-class(s.2)   #weired now it's a list
-
+class(s.2)   #matrix
+View(s.2)
 
 #reformat the data, so that each column is a tag
-get.source.info <- function(object){
-  data.frame(s1=object[1],s2=object[2],s3=object[3],s5=object[4],s6=object[5],
-             s7=object[6],s8=object[7])
-}
-
-require(plyr)
-s.3 <- ldply(s.2,get.source.info)
-head(s.3)   #wonderful!!!!
+s.3<-t(s.2)
+View(s.3)
 
 #split the columns that have two variables
+#but before that, pick out those that are completely missing
+require(plyr)
 s.3[,1]<-unlist(str_extract_all(s.3[,1],"name = .*"))
+s.3<-as.data.frame(s.3)
 new<-ldply(str_split(s.3[,3],pattern=", "),function(i)data.frame(s3=i[1],s4=i[2]))
-s.4<-cbind(s.3[,1:2],new,s.3[,5:7])
-head(s.4)
+s.4<-cbind(s.3[,1:2],new,s.3[,4:7])
+View(s.4)
 
 #change column names
-names(s.4)<-c("name","locationName","current","government","orgType","stateDelegation","gender")
+names(s.4)<-c("name","locationName","current","government","party","orgType","stateDelegation","gender")
 
 #remove name tags in the content
 s.5<-str_replace_all(as.matrix(s.4),"[[:alpha:]]+ = ","")
@@ -171,20 +189,6 @@ View(s.8[1:10,])
 save(s.8,file="source.Rda")
 
 load("source.Rda")
-View(s.8[1:20,])
-
-######---clean text column-----####
-expression="<[^>]*.>"
-clean=function(x){
-  t=gsub(expression,"",x)
-  t2=gsub("(\n)","",t)
-  return(t2)
-}
-text=sapply(final.raw[,13],clean)
-length(text)
-text[1:2]
-names(text)<-"text"
-text1<-as.data.frame(text)
 
 ######---clean other column-----####
 example<-final.raw$keywords[1:10]
@@ -209,57 +213,78 @@ or<-str_replace_all(pp$organisations,"^list\\($","")
 pp$organisations<-or
 
 #####combine cleaned data with the original dataset
-View(final.raw[1:6,])
 names(final.raw)
 
 final.raw1<-final.raw[,c(1,14,15)]
 final.raw2<-cbind(final.raw1,s.8,pp)
 
 save(final.raw2,file="final_clean.Rda")
+load("final_clean.Rda")
 
-##-----clean key words-----##
+########################################
+####----check data & debug----##########
+########################################
 
-#####-----------the rest is just for checking-------------#####
+names(final.raw2)
+unique(final.raw2$orgType)
+which(final.raw2$orgType=="South Carolina")
+View(final.raw2[which(final.raw2$orgType=="South Carolina"),])
+View(final.raw[which(final.raw2$orgType=="South Carolina"),])
+
+bug<-final.raw$source[which(final.raw2$orgType=="South Carolina")]
+bug.1<-str_split(bug,pattern="\"[[:blank:]]{0,1},")  
 
 
-ff=list()
-for (q in c(1:213)){
-  ff[[q]]=data.frame()
-  for (i in c(1:length(mydata[[q]]))){ 
-    for (j in c(1:3)){
-    ff[[q]][i,j]=unlist(mydata[[q]][[i]][15])[j]
-   
-    
-  }
-  ff[[q]][i,4]=unlist(mydata[[q]][[i]][15])[length(unlist(mydata[[q]][[i]][15]))]
+#############################################
+####-----structual topic modeling------######
+#############################################
+
+##this is our documents
+expression="<[^>]*.>"
+clean=function(x){
+  t=gsub(expression,"",x)
+  t2=gsub("(\n)","",t)
+  t3=gsub("nbsp","",t2)
+  return(t3)
 }
-}
-metadata=rbindlist(ff)
-metadata=data.frame(metadata)
-clean.data=function(x){
-  x=gsub("<[^>]*>",",",x)
-  x=gsub("\\/|[0-9]|\\:|;","",x)
-}
-final.refine=apply(final.raw,c(1,2),clean.data)
-party=sapply(final.refine[,11],function(x)strsplit(x,","))
-meta2=sapply(c(2:7),function(x)sapply(c(1:8813),function(y)(party[[y]][x])))
-metadata.new=cbind(final.refine[,10],meta2)
-metadata.new[,c(2:7)]=apply(metadata.new[,c(2:7)],c(1,2),function(x)unlist(strsplit(x,"="))[2])
+text=sapply(final.raw[,13],clean)
+meta<-s.8[,c(2,4,6)]
+head(meta)
 
-##metadata.refine=apply(metadata,c(1,2),clean.data)
-metadata.refine[,3]=sapply(metadata.refine[,3],function(x)gsub("[[:alpha:]]","",x))
-metadata.refine[,4]=sapply(metadata.refine[,4],function(x)gsub("\\/|[0-9]|\\:|;","",x))
-
-library(stm)
-temp<-textProcessor(documents=final.refine[,13],metadata=final.refine)
+##prepare the document 
+temp<-textProcessor(documents=text,metadata=meta)
 meta<-temp$meta
 vocab<-temp$vocab
 docs<-temp$documents
-out <- prepDocuments(docs, vocab,meta)
+out <- prepDocuments(docs, vocab, meta)
 docs<-out$documents
- vocab<-out$vocab
+vocab<-out$vocab
 meta <-out$meta
-CongressPrevFit <- stm(docs,vocab,K=5,prevalence=~meta[,11])
-library(lda)
-length(poliblog.documents)
-length(poliblog.vocab)
+
+##run the STM model
+releasePrevFit <- stm(docs,vocab,K=13,prevalence=~meta$locationName+meta$government+meta$orgType)
+
+##find the top words for each topic 
+labelTopics(releasePrevFit,topics=c(1:13))
+
+###find the most relevant document to topic1: findtoughts has two list one is index and one is docs
+topic1.release=findThoughts(releasePrevFit,texts=text,topics=1,n=3)$docs[[1]]
+
+##find the topic for each document
+topic.finding=apply(releasePrevFit$theta,1,which.max)
+table(topic.finding)
+topic10.thought=findThoughts(releasePrevFit,texts=text,topics=10,n=3)
+
+##plot the comparison of different topics in terms of the frequency of the top words 
+plot.STM(releasePrevFit,type="perspective",topics=c(1,2))
+
+##plot the topic and their top words and the topics are ranked by the frequency across the documents 
+plot.STM(releasePrevFit,type="summary")
+
+##
+prep <- estimateEffect(c(1) ~ government, releasePrevFit,metadata=meta)
+plot.estimateEffect(prep, covariate="government", model=releasePrevFit,method="pointestimate")
+
+##
+mod.out.corr<-topicCorr(releasePrevFit)
+plot.topicCorr(mod.out.corr)
